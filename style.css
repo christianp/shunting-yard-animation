@@ -1,0 +1,92 @@
+body {
+    margin: 0;
+    padding: 1em 0;
+    display: grid;
+    grid-gap: 1em;
+    grid-template: "controls controls" auto "thinking thinking" auto "algorithm railway" auto / 1fr 2fr;
+}
+@media screen and (max-width: 1200px) {
+    body {
+        grid-template: "controls" "thinking" "railway" "algorithm" / 1fr;
+    }
+}
+#controls {
+    display: grid;
+    grid-gap: 1em;
+    grid-area: controls;
+}
+#thinking {
+    grid-area: thinking;
+    text-align: center;
+}
+#railway {
+    grid-area: railway;
+}
+#algorithm {
+    grid-area: algorithm;
+}
+
+label {
+    display: block;
+    padding: 0 1em;
+}
+input {
+    display: block;
+    width: 100%;
+    margin: 0.5rem 0;
+}
+
+#expression {
+    font-size: 2em;
+    font-family: monospace;
+}
+
+#keypad {
+    display: flex;
+    grid-gap: 1em;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#keypad button {
+    font-size: 1em;
+    width: 3em;
+    height: 3em;
+    line-height: 1em;
+    background: var(--colour);
+    border-radius: 0.5em;
+}
+
+#keypad button:hover {
+    background: #eee;
+}
+
+
+.token {
+    --colour: white;
+}
+rect.token {
+    fill: var(--colour);
+}
+
+.token.name, .token.number {
+    --colour: hsl(120,80%,70%);
+}
+
+.token.left-bracket, .token.right-bracket {
+    --colour: hsl(240,80%,70%);
+}
+
+#algorithm .step {
+    transition: background 0.5s;
+}
+
+#algorithm .active {
+    background: hsl(120,80%,95%);
+    text-decoration: underline;
+}
+
+footer {
+    margin-top: 10em;
+    text-align: center;
+}
