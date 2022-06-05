@@ -565,7 +565,7 @@ view_train time train =
                 [ Svg.g
                     [ SA.transform <| "translate("++(ff x)++", "++(ff y)++") rotate(" ++ (ff <| radians_to_degrees angle) ++ ")"
                     ]
-                    ([ body, spout ]++(List.map rivet (List.range 0 4))++[ knobble, cab ])
+                    ([ body ]++(List.map rivet (List.range 0 4))++[ spout, knobble, cab ])
                 ]
                 ++(case train.pulling of
                     Nothing -> []
