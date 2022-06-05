@@ -736,6 +736,7 @@ view_railway model =
     in
         Svg.svg
             [ SA.viewBox <| (ff <| -padding - lead_in)++" "++(ff -padding)++" "++(ff canvas_width)++" "++(ff canvas_height)
+            , SA.id "railway"
             ]
             (
                 [ Svg.g

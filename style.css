@@ -3,11 +3,11 @@ body {
     padding: 1em;
     display: grid;
     grid-gap: 1em;
-    grid-template: "controls controls" auto "algorithm thinking" auto "algorithm railway" 1fr / 1fr 2fr;
+    grid-template: "controls controls" auto "algorithm thinking" auto "algorithm railway" 1fr "footer footer" auto / 1fr 2fr;
 }
 @media screen and (max-width: 1200px) {
     body {
-        grid-template: "controls" "thinking" "railway" "algorithm" / 1fr;
+        grid-template: "controls" "thinking" "railway" "algorithm" "footer" / 1fr;
     }
 }
 #controls {
