@@ -53,36 +53,59 @@ input {
     width: 3em;
     height: 3em;
     line-height: 1em;
-    background: var(--colour);
+    background: hsl(var(--colour),var(--sat),var(--lum));
     border-radius: 0.5em;
 }
 
-#keypad button:hover {
-    background: #eee;
+.control {
+    --colour: 0;
+    --sat: 0%;
+    --lum: 100%;
 }
-
-
 .token {
-    --colour: white;
+    --colour: 0;
+    --sat: 80%;
+    --lum: 70%;
 }
-rect.token {
-    fill: var(--colour);
+.token rect.body{
+    fill: hsl(var(--colour),var(--sat),var(--lum));
 }
 
 .token.name, .token.number {
-    --colour: hsl(120,80%,70%);
+    --colour: 120;
 }
 
 .token.left-bracket, .token.right-bracket {
-    --colour: hsl(240,80%,70%);
+    --colour: 240;
+}
+
+#keypad button:hover,
+#keypad button:focus {
+    --lum: 50%;
+}
+
+#keypad button:active {
+    --lum: 30%;
+}
+#keypad button:disabled {
+    --lum: 80%;
+    --sat: 30%;
 }
 
 #algorithm .step {
     transition: background 0.5s;
+    padding: 0.2em 0.5em;
+    margin-left: -0.5em;
+}
+dl {
+    margin: 1em 0;
+}
+dt {
+    font-weight: bold;
 }
 
 #algorithm .active {
-    background: hsl(120,80%,95%);
+    background: hsl(120,80%,90%);
     text-decoration: underline;
 }
 

@@ -80,7 +80,6 @@ type alias Model =
 type Msg
     = SetExpr String
     | SetTrainSpeed String
-    | DoStep
     | Frame Float
     | PushToken Token
     | DropToken
@@ -125,13 +124,6 @@ update msg model = case msg of
     DropToken -> case model.arriving_token of
         Just _ -> { model | arriving_token = Nothing } |> nocmd
         Nothing -> { model | yard = Result.map unshift_input model.yard } |> nocmd
-    DoStep -> case model.yard of
-        Ok yard -> 
-            let
-                (moves, yard2) = shunting_yard_step yard
-            in
-                { model | yard = yard2, moves = moves++model.moves } |> nocmd
-        _ -> model |> nocmd
     Frame dt -> { model | time = model.time + dt*model.train_speed } |> (\m -> if m.train_speed>0 then update_train m else m) |> update_arriving_tokens |> nocmd
 
 set_shunting_yard : Model -> Model
@@ -150,10 +142,26 @@ set_shunting_yard model =
 subscriptions : Model -> Sub Msg
 subscriptions model = onAnimationFrameDelta Frame
 
-view_rails : Coords -> List RailwayPiece -> Svg Msg
-view_rails (x, y) pieces =
+railway_path : Coords -> List RailwayPiece -> String
+railway_path (x,y) pieces = String.join " " (["M "++(ff x)++" "++(ff y)]++(List.map (\p -> ""++(railway_piece_path p)) pieces))
+
+view_rail_under : (Coords, List RailwayPiece) -> Svg Msg
+view_rail_under ((x,y), pieces) =
     let
-        d = SA.d <| String.join " " (["M "++(ff x)++" "++(ff y)]++(List.map (\p -> ""++(railway_piece_path p)) pieces))
+        d = SA.d <| railway_path (x,y) pieces
+    in
+        Svg.path
+            [ d
+            , SA.stroke "#eee"
+            , SA.fill "none"
+            , SA.strokeWidth <| ff <| track_gauge*3
+            ]
+            []
+
+view_rails : (Coords, List RailwayPiece) -> Svg Msg
+view_rails ((x, y), pieces) =
+    let
+        d = SA.d <| railway_path (x,y) pieces
     in
         Svg.g
             [ SA.style "mix-blend-mode: multiply" ]
@@ -211,27 +219,32 @@ view model =
         ]
     }
 
-keypad_button onClick label class =
-    H.button
-        [ HA.class class
-        , HE.onClick onClick
-        ]
-        [ H.text label ]
-
 keypad model =
-    H.div
-        [ HA.id "keypad" ]
-        ([ keypad_button (SetExpr "") "C" "reset"
-         , keypad_button DropToken "←" "drop-token"
-         , keypad_button (PushToken LeftBracket) "(" "token left-bracket"
-         , keypad_button (PushToken RightBracket) ")" "token right-bracket"
-         , keypad_button (PushToken (Name "a")) "a" "token name"
-         , keypad_button (PushToken (LiteralNumber 1)) "1" "token number"
-        ]++(List.map (\op ->
-            keypad_button (PushToken (BinaryOpToken op)) op.display "token op"
-            )
-            Token.ops
-        ))
+    let
+        keypad_button always_on onClick label class =
+            H.button
+                [ HA.class class
+                , HE.onClick onClick
+                , HA.disabled (model.train.route /= [] && not always_on)
+                ]
+                [ H.text label ]
+    in
+        H.div
+            [ HA.id "keypad" ]
+            ([ keypad_button True (SetExpr "") "C" "control reset"
+             , keypad_button False DropToken "⌫" "control drop-token"
+             , keypad_button False (PushToken LeftBracket) "(" "token left-bracket"
+             , keypad_button False (PushToken RightBracket) ")" "token right-bracket"
+             , keypad_button False (PushToken (Name "a")) "a" "token name"
+            ]++(List.map (\i ->
+                keypad_button False (PushToken (LiteralNumber i)) (String.fromInt i) "token number"
+                )
+                (List.range 0 9)
+            )++(List.map (\op ->
+                keypad_button False (PushToken (BinaryOpToken op)) op.display "token op"
+                )
+                Token.ops
+            ))
 
 view_algorithm model =
     let
@@ -469,18 +482,90 @@ view_train time train =
         (startx,starty) = train_position 0 train
         (carriage_pos, carriage_angle) = 
             if d < carriage_offset then
-                ((x - (cos (angle_on_railway current_segment (if d < carriage_offset then 0 else (d-carriage_offset))))*carriage_offset, starty), 0)
+                ((x - (cos (angle_on_railway current_segment (if d < carriage_offset then 0 else (d-carriage_offset))))*carriage_offset, starty), pi)
             else
                 (train_position (d-carriage_offset) train, angle_on_railway current_segment (d-carriage_offset))
+
+        (connect_x, connect_y) =
+            let
+                (cx,cy) = carriage_pos
+            in
+                case train.pulling of
+                    Just _ -> (cx + (cos carriage_angle)*carriage_length/2, cy + (sin carriage_angle)*carriage_length/2)
+                    Nothing -> (x - (cos angle)*width*0.6, y - (sin angle)*width*0.6)
+        connector =
+            Svg.line
+                [ SA.x1 <| ff <| x
+                , SA.y1 <| ff <| y
+                , SA.x2 <| ff <| connect_x
+                , SA.y2 <| ff <| connect_y
+                , SA.stroke "black"
+                , SA.strokeWidth "4"
+                ]
+                []
+        body = 
+            Svg.path
+                [ SA.d <| strf "M % % l % % a % % 0 0 1 % % l % % z"(List.map ff [-width/2, -height/2, width*0.9, 0, height*0.6, height*0.6, 0, height, -width*0.9, 0])
+                , SA.fill "hsl(0,0%,50%)"
+                , SA.stroke "black"
+                , SA.strokeWidth "2"
+                ]
+                []
+        spout = Svg.g []
+            [ Svg.circle
+                [ SA.cx <| ff <| width*0.45
+                , SA.cy <| ff <| 0
+                , SA.r <| ff <| height/4
+                , SA.fill "hsl(0,0%,50%)"
+                , SA.stroke "black"
+                , SA.strokeWidth "2"
+                ]
+                []
+            , Svg.circle
+                [ SA.cx <| ff <| width*0.45
+                , SA.cy <| ff <| 0
+                , SA.r <| ff <| height/6
+                , SA.fill "black"
+                ]
+                []
+            ]
+        knobble =
+            Svg.circle
+                [ SA.cx <| ff <| width*0.1
+                , SA.cy <| ff <| 0
+                , SA.r <| ff <| height/5
+                , SA.fill "hsl(120,60%,50%)"
+                , SA.stroke "black"
+                , SA.strokeWidth "2"
+                ]
+                []
+        rivet i =
+            Svg.path
+                [ SA.d <| strf "M % % a % % 0 0 1 % %" (List.map ff [width*0.3 - (toFloat i)*10, -height/2, height, height, 0 , height])
+                , SA.stroke "hsl(0,0%,30%)"
+                , SA.strokeWidth "2"
+                , SA.fill "none"
+                ]
+                []
+
+        cab =
+            Svg.rect
+                [ SA.x <| ff <| -width*0.5
+                , SA.y <| ff <| -height*0.6
+                , SA.width <| ff <| width*0.3
+                , SA.height <| ff <| height*1.2
+                , SA.fill "black"
+                ]
+                []
     in
         Svg.g
             [  ]
-            (
-                [ Svg.path
+            (   [connector]
+                ++
+                [ Svg.g
                     [ SA.transform <| "translate("++(ff x)++", "++(ff y)++") rotate(" ++ (ff <| radians_to_degrees angle) ++ ")"
-                    , SA.d <| strf "M % % l % % l % % l % % l % % z" (List.map ff [-width/2, -height/2, width*0.6, 0, width*0.4, height/2, -width*0.4, height/2, -width*0.6, 0])
                     ]
-                    []
+                    ([ body, spout ]++(List.map rivet (List.range 0 4))++[ knobble, cab ])
                 ]
                 ++(case train.pulling of
                     Nothing -> []
@@ -548,36 +633,76 @@ view_carriages model track =
                 Output -> yard.output
                 Bin -> []
             Err _ -> []
+        angle = case track of
+            Input -> pi
+            _ -> 0
     in
         Svg.g
             []
-            (List.indexedMap (\i -> \c -> view_carriage c (x+direction*(offset - (toFloat i)*carriage_gap), y) 0) (List.reverse carriages))
+            (List.indexedMap (\i -> \c -> view_carriage c (x+direction*(offset - (toFloat i)*carriage_gap), y) angle) (List.reverse carriages))
 
 
 view_carriage : Token -> Coords -> Float -> Svg Msg
 view_carriage carriage (x, y) angle =
     let
         width = carriage_length
-        height = track_gauge * 1.3
+        height = track_gauge * 1.5
         class = case carriage of
             Name _ -> "name"
             LiteralNumber _ -> "number"
             LeftBracket -> "left-bracket"
             RightBracket -> "right-bracket"
-            BinaryOpToken _ -> "binary-op"
+            BinaryOpToken _ -> "op"
             Comma -> "comma"
+        inlay = 0.2
+
+        opacity angle2 = (cos (angle+angle2))*0.2 + 0.4
     in
         Svg.g
-            [ SA.transform <| "translate("++(ff x)++", "++(ff y)++") rotate(" ++ (ff <| radians_to_degrees angle) ++ ")" ]
-            [ Svg.rect 
+            [ SA.transform <| "translate("++(ff x)++", "++(ff y)++") rotate(" ++ (ff <| radians_to_degrees angle) ++ ")"
+            , SA.class <| "token "++class
+            ]
+            [ Svg.line
+                [ SA.x1 <| ff <| -width*0.6
+                , SA.y1 "0"
+                , SA.x2 <| ff <| width*0.6
+                , SA.y2 "0"
+                , SA.strokeWidth "4"
+                , SA.stroke "black"
+                ]
+                []
+            , Svg.rect  -- Body
                 [ SA.width (ff width)
+                , SA.class "body"
                 , SA.height (ff height)
                 , SA.x (ff <| -width/2)
                 , SA.y (ff <| -height/2)
-                , SA.class <| "token "++class
-                , SA.stroke "black"
                 , SA.strokeWidth (ff <| width/10)
                 , SA.strokeLinejoin "round"
+                ]
+                []
+            , Svg.path
+                [ SA.d <| strf "M % % l % % l % % l % %" (List.map ff [-width/2, -height/2, width, 0, -width*inlay, height*inlay, -width*(1-2*inlay), 0, -width*inlay, -height*inlay])
+                , SA.fill "black"
+                , SA.fillOpacity <| ff <| opacity 0
+                ]
+                []
+            , Svg.path
+                [ SA.d <| strf "M % % l % % l % % l % %" (List.map ff [width/2, -height/2, -width*inlay, height*inlay, 0, height*(1-2*inlay), width*inlay, height*inlay])
+                , SA.fill "black"
+                , SA.fillOpacity <| ff <| opacity (pi/2)
+                ]
+                []
+            , Svg.path
+                [ SA.d <| strf "M % % l % % l % % l % %" (List.map ff [-width/2, -height/2, width*inlay, height*inlay, 0, height*(1-2*inlay), -width*inlay, height*inlay])
+                , SA.fill "black"
+                , SA.fillOpacity <| ff <| opacity (-pi/2)
+                ]
+                []
+            , Svg.path
+                [ SA.d <| strf "M % % l % % l % % l % %" (List.map ff [-width/2, height/2, width, 0, -width*inlay, -height*inlay, -width*(1-2*inlay), 0, -width*inlay, height*inlay])
+                , SA.fill "black"
+                , SA.fillOpacity <| ff <| opacity (pi)
                 ]
                 []
             , Svg.text_
@@ -600,31 +725,41 @@ view_railway model =
         lead_in = 400
         canvas_width = 2*padding + 3*track_length + long_junction_width + 2*lead_in
         canvas_height = 2*padding + uturn_height + 2*long_junction_height
+        rail_segments = 
+            [ ((0, 0), [ IncrediblyLongHorizontal ])
+            , ((0, 0), ([ AnticlockwiseTurn ]++short_junction_down++[ ShortHorizontal, ShortHorizontal, ClockwiseDown, Vertical]))
+            , ((-incredibly_long_track_length, uturn_height + short_junction_height), [ IncrediblyLongHorizontal, MidHorizontal ])
+            , ((-incredibly_long_track_length, uturn_height + short_junction_height + long_junction_height), ([ IncrediblyLongHorizontal, TinyHorizontal] ++ long_junction_up))
+            ]
+
+        label_offset = track_gauge * 2.2
     in
         Svg.svg
             [ SA.viewBox <| (ff <| -padding - lead_in)++" "++(ff -padding)++" "++(ff canvas_width)++" "++(ff canvas_height)
             ]
             (
-                [ view_rails (0, 0) [ IncrediblyLongHorizontal ]
-                , view_rails (0, 0) ([ AnticlockwiseTurn ]++short_junction_down++[ ShortHorizontal, ShortHorizontal, ClockwiseDown, Vertical])
-                , view_rails (-incredibly_long_track_length, uturn_height + short_junction_height) [ IncrediblyLongHorizontal, MidHorizontal ]
-                , view_rails (-incredibly_long_track_length, uturn_height + short_junction_height + long_junction_height) ([ IncrediblyLongHorizontal, TinyHorizontal] ++ long_junction_up)
+                [ Svg.g
+                    []
+                    (List.map view_rail_under rail_segments)
+                , Svg.g
+                    []
+                    (List.map view_rails rail_segments)
                 , Svg.text_
                     [ SA.x <| ff 0
-                    , SA.y <| ff <| track_gauge*2
+                    , SA.y <| ff <| label_offset
                     ]
                     [ Svg.text "Input"
                     ]
                 , Svg.text_
                     [ SA.x <| ff 0
-                    , SA.y <| ff <| uturn_height + short_junction_height + track_gauge*2
+                    , SA.y <| ff <| uturn_height + short_junction_height + label_offset
                     , SA.textAnchor "end"
                     ]
                     [ Svg.text "Stack"
                     ]
                 , Svg.text_
                     [ SA.x <| ff 0
-                    , SA.y <| ff <| uturn_height + short_junction_height + long_junction_height + track_gauge*2
+                    , SA.y <| ff <| uturn_height + short_junction_height + long_junction_height + label_offset
                     , SA.textAnchor "end"
                     ]
                     [ Svg.text "Output"

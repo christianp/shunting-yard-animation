@@ -49,7 +49,7 @@ vertical_length = 3*track_length
 
 
 -- The distance between the rails
-track_gauge = 15
+track_gauge = 20
 
 -- The lengths of train and carriage pieces are defined in terms of the track gauge
 train_length = track_gauge * 3
