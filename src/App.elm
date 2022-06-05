@@ -656,7 +656,7 @@ view_carriage carriage (x, y) angle =
             Comma -> "comma"
         inlay = 0.2
 
-        opacity angle2 = (cos (angle+angle2))*0.2 + 0.4
+        opacity angle2 = (cos (angle+angle2))*0.1 + 0.2
     in
         Svg.g
             [ SA.transform <| "translate("++(ff x)++", "++(ff y)++") rotate(" ++ (ff <| radians_to_degrees angle) ++ ")"
@@ -709,6 +709,8 @@ view_carriage carriage (x, y) angle =
                 [ SA.dominantBaseline "middle"
                 , SA.textAnchor "middle"
                 , SA.fill "black"
+                , SA.fontWeight "bold"
+                , SA.fontSize <| ff <| height*2/3
                 , SA.fontFamily "monospace"
                 , SA.transform <| "rotate("++(ff <| radians_to_degrees -angle)++")"
                 ]
